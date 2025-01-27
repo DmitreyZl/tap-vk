@@ -120,6 +120,7 @@ class GroupsStream(VkStream):
         th.Property("admin_level", th.IntegerType),
         th.Property("is_member", th.IntegerType),
         th.Property("is_advertiser", th.IntegerType),
+        th.Property("members_count", th.IntegerType),
     ).to_dict()
 
     def get_records(
