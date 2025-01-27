@@ -146,7 +146,7 @@ class GroupsStream(VkStream):
         # Получаем объект VK_API
         vk = vk_session.get_api()
 
-        stat = vk.groups.getById(group_id=self.config.get('group_id'), fields=params.get('fields'))
+        stat = vk.groups.getById(group_id=self.config.get('group_id'), fields='members_count')
 
         #   yield record.to_dict()
         yield from extract_jsonpath(self.records_jsonpath, input=stat)
