@@ -51,7 +51,8 @@ class GroupPostsStream(VkStream):
         th.Property("reach_ads", th.IntegerType),
         th.Property("report", th.IntegerType),
         th.Property("to_group", th.IntegerType),
-        th.Property("unsubscribe", th.IntegerType)
+        th.Property("unsubscribe", th.IntegerType),
+        th.Property("date", th.IntegerType),
     ).to_dict()
 
     def get_records(
@@ -86,6 +87,7 @@ class GroupPostsStream(VkStream):
                      "unsubscribe": 0
                      }
             n = {'group_id': i['owner_id'],
+                 'date': i['date'],
                  'inner_type': i['inner_type'],
                  'type': i['type'],
                  'text': i['text'],
