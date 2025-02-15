@@ -18,6 +18,70 @@ SCHEMAS_DIR = resources.files(__package__) / "schemas"
 # TODO: - Override `UsersStream` and `GroupsStream` with your own stream definition.
 #       - Copy-paste as many times as needed to create multiple stream types.
 
+class GroupPostsCommentsStream(VkStream):
+    """Define custom stream."""
+
+    name = "group_posts_comments"
+    primary_keys = ["post_id", "group_id", "comment_id"]
+    cont = []
+
+    schema = th.PropertiesList(
+        th.Property(
+            "post_id",
+            th.IntegerType,
+            description="The post's system ID",
+        ),
+        th.Property(
+            "group_id",
+            th.IntegerType,
+            description="The group's system ID",
+        ),
+        th.Property(
+            "comment_id",
+            th.IntegerType,
+            description="The comment's system ID",
+        ),
+        th.Property("from_id", th.IntegerType),
+        th.Property("date", th.StringType),
+        th.Property("text", th.StringType),
+        th.Property("reply_to_user", th.IntegerType),
+        th.Property("reply_to_comment", th.IntegerType),
+        th.Property("likes", th.IntegerType)
+    ).to_dict()
+
+    def get_records(
+            self,
+            context: Context | None,
+    ) -> t.Iterable[dict]:
+        # Ваш токен доступа
+        params = self.config.get("params") or {}
+        token = self.config.get('token')
+        vk_session = VkApi(token=token)
+
+        # Получаем объект VK_API
+        vk = vk_session.get_api()
+        owner_id = 0 - int(self.config.get('group_id'))
+        wall_posts = vk.wall.get(owner_id=owner_id, count=100)
+        stat = []
+        for i in wall_posts['items']:
+            try:
+                wall = vk.wall.getComments(owner_id=owner_id, post_id=i['id'], need_likes=1, count=100, sort='desc')
+                for j in wall['items']:
+                    w = {'comment_id': j['id'],
+                         'post_id': i['id'],
+                         'group_id': owner_id,
+                         'from_id': j['from_id'],
+                         'date': j['date'],
+                         'text': j['text'],
+                         'reply_to_user': j.get('reply_to_user', 0),
+                         'reply_to_comment': j.get('reply_to_comment', 0),
+                         'likes': j.get('likes', {}).get('count', 0)
+                         }
+                    stat.append(w)
+            except ApiError:
+                pass
+        yield from extract_jsonpath(self.records_jsonpath, input=stat)
+
 
 class GroupPostsStream(VkStream):
     """Define custom stream."""
@@ -96,6 +160,86 @@ class GroupPostsStream(VkStream):
             merged_dictionary = {**w, **n}
             stat.append(merged_dictionary)
         #   yield record.to_dict()
+        yield from extract_jsonpath(self.records_jsonpath, input=stat)
+
+
+class StoryStream(VkStream):
+    """Define custom stream."""
+
+    name = "story"
+    primary_keys = ["id", "group_id"]
+
+    schema = th.PropertiesList(
+        th.Property(
+            "group_id",
+            th.IntegerType,
+            description="The group's system ID",
+        ),
+        th.Property("id", th.IntegerType),
+        th.Property("date", th.IntegerType),
+        th.Property("expires_at", th.IntegerType),
+        th.Property("is_expired", th.StringType),
+        th.Property("is_deleted", th.StringType),
+        th.Property("type", th.StringType),
+        th.Property("link", th.StringType),
+        th.Property("replies", th.IntegerType),
+        th.Property("views", th.IntegerType),
+        th.Property("answer", th.IntegerType),
+        th.Property("shares", th.IntegerType),
+        th.Property("subscribers", th.IntegerType),
+        th.Property("bans", th.IntegerType),
+        th.Property("open_link", th.IntegerType),
+    ).to_dict()
+
+    def get_records(
+            self,
+            context: Context | None,
+    ) -> t.Iterable[dict]:
+        """Return a generator of record-type dictionary objects.
+
+        The optional `context` argument is used to identify a specific slice of the
+        stream if partitioning is required for the stream. Most implementations do not
+        require partitioning and should ignore the `context` argument.
+
+        Args:
+            context: Stream partition or context dictionary.
+
+        Raises:
+            NotImplementedError: If the implementation is TODO
+        """
+        # Ваш токен доступа
+        params = self.config.get("params") or {}
+        token = self.config.get('token')
+        vk_session = VkApi(token=token)
+
+        # Получаем объект VK_API
+        vk = vk_session.get_api()
+        owner_id = 0 - int(self.config.get('group_id'))
+        stories = vk.stories.get(owner_id=owner_id)
+        stat = []
+        for i in stories['items']:
+            for j in i['stories']:
+                try:
+                    st = vk.stories.getStats(owner_id=owner_id, story_id=j['id'])
+                    w = {'story_id': j['id'],
+                         'group_id': owner_id,
+                         'date': j['date'],
+                         'expires_at': j['expires_at'],
+                         'is_expired': j.get('is_expired', 0),
+                         'is_deleted': j.get('is_deleted', 0),
+                         'type': j.get('type', 0),
+                         'link': j.get('link', {}).get('url', ''),
+                         'views': st.get('views', {}).get('count', 0),
+                         'replies': st.get('replies', {}).get('count', 0),
+                         'answer': st.get('answer', {}).get('count', 0),
+                         'shares': st.get('shares', {}).get('count', 0),
+                         'subscribers': st.get('subscribers', {}).get('count', 0),
+                         'bans': st.get('bans', {}).get('count', 0),
+                         'open_link': st.get('open_link', {}).get('count', 0),
+                         }
+                    stat.append(w)
+                except ApiError:
+                    pass
         yield from extract_jsonpath(self.records_jsonpath, input=stat)
 
 

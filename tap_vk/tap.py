@@ -59,6 +59,8 @@ class TapVk(Tap):
            streams.GroupStatStream(self),
            streams.GroupsStream(self),
            streams.GroupPostsStream(self),
+           streams.GroupPostsCommentsStream(self),
+           #streams.StoryStream(self)
         ]
 
 
