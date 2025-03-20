@@ -1,6 +1,9 @@
 """Stream type classes for tap-vk."""
 
 from __future__ import annotations
+
+import logging
+
 from vk_api import VkApi
 from vk_api.exceptions import ApiError
 import typing as t
@@ -168,6 +171,7 @@ class StoryStream(VkStream):
 
     name = "story"
     primary_keys = ["id", "group_id"]
+    logger = logging.getLogger('vk_api')
 
     schema = th.PropertiesList(
         th.Property(
@@ -178,17 +182,19 @@ class StoryStream(VkStream):
         th.Property("id", th.IntegerType),
         th.Property("date", th.IntegerType),
         th.Property("expires_at", th.IntegerType),
-        th.Property("is_expired", th.StringType),
-        th.Property("is_deleted", th.StringType),
         th.Property("type", th.StringType),
-        th.Property("link", th.StringType),
+        th.Property("track_code", th.StringType),
         th.Property("replies", th.IntegerType),
         th.Property("views", th.IntegerType),
+        th.Property("likes_count", th.IntegerType),
+        th.Property("new_reactions", th.IntegerType),
+        th.Property("narratives_count", th.IntegerType),
         th.Property("answer", th.IntegerType),
         th.Property("shares", th.IntegerType),
         th.Property("subscribers", th.IntegerType),
         th.Property("bans", th.IntegerType),
         th.Property("open_link", th.IntegerType),
+        th.Property("link", th.StringType)
     ).to_dict()
 
     def get_records(
@@ -214,28 +220,36 @@ class StoryStream(VkStream):
 
         # Получаем объект VK_API
         vk = vk_session.get_api()
-        owner_id = 0 - int(self.config.get('group_id'))
+        owner_id = 0 - self.config.get('group_id')
         stories = vk.stories.get(owner_id=owner_id)
         stat = []
         for i in stories['items']:
-            for j in i['stories']:
+            for j in i:
+
                 try:
                     st = vk.stories.getStats(owner_id=owner_id, story_id=j['id'])
-                    w = {'story_id': j['id'],
-                         'group_id': owner_id,
+                    logging.error(st)
+                    if len(j.get('clickable_stickers', {}).get('clickable_stickers', [])) != 0:
+                        link = j.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object', {}).get('url', '-')
+                    else:
+                        link = '-'
+                    w = {'id': j['id'],
+                         'group_id': abs(owner_id),
                          'date': j['date'],
                          'expires_at': j['expires_at'],
-                         'is_expired': j.get('is_expired', 0),
-                         'is_deleted': j.get('is_deleted', 0),
-                         'type': j.get('type', 0),
-                         'link': j.get('link', {}).get('url', ''),
+                         'type': j.get('type', '-'),
+                         'track_code': j.get('track_code', '-'),
                          'views': st.get('views', {}).get('count', 0),
                          'replies': st.get('replies', {}).get('count', 0),
+                         'likes_count': j.get('likes_count', 0),
+                         'new_reactions': len(j.get('new_reactions', [])),
+                         'narratives_count': j.get('narratives_count', 0),
                          'answer': st.get('answer', {}).get('count', 0),
                          'shares': st.get('shares', {}).get('count', 0),
                          'subscribers': st.get('subscribers', {}).get('count', 0),
                          'bans': st.get('bans', {}).get('count', 0),
                          'open_link': st.get('open_link', {}).get('count', 0),
+                         'link': link
                          }
                     stat.append(w)
                 except ApiError:
