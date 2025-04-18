@@ -65,8 +65,10 @@ class GroupPostsCommentsStream(VkStream):
         vk = vk_session.get_api()
         owner_id = 0 - int(self.config.get('group_id'))
         wall_posts = vk.wall.get(owner_id=owner_id, count=100)
+        wall_posts_2 = vk.wall.get(owner_id=owner_id, offset=100, count=100)
+        posts = wall_posts['items'] + wall_posts_2['items']
         stat = []
-        for i in wall_posts['items']:
+        for i in posts:
             try:
                 wall = vk.wall.getComments(owner_id=owner_id, post_id=i['id'], need_likes=1, count=100, sort='desc')
                 for j in wall['items']:
@@ -135,8 +137,10 @@ class GroupPostsStream(VkStream):
         vk = vk_session.get_api()
         owner_id = 0 - int(self.config.get('group_id'))
         wall_posts = vk.wall.get(owner_id=owner_id, count=100)
+        wall_posts_2 = vk.wall.get(owner_id=owner_id, offset=100, count=100)
+        posts = wall_posts['items'] + wall_posts_2['items']
         stat = []
-        for i in wall_posts['items']:
+        for i in posts:
             try:
                 wall = vk.stats.getPostReach(owner_id=owner_id, post_ids=i['id'])
                 w = wall[0]
