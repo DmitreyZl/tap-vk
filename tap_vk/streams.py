@@ -371,8 +371,10 @@ class StoryHistoryStream(VkStream):
         if len(stories_all_list) == 0:
             return extract_jsonpath(self.records_jsonpath, input=stat)
         logging.error(stories_all_list)
-        stories = vk.stories.getById(stories=stories_all_list[:100])
-
+        try:
+            stories = vk.stories.getById(stories=stories_all_list[100:200])
+        except ApiError:
+            return extract_jsonpath(self.records_jsonpath, input=stat)
         for i in stories['items']:
             try:
                 # logging.info(i)
@@ -402,7 +404,7 @@ class StoryHistoryStream(VkStream):
                      }
                 stat.append(w)
             except ApiError:
-                pass
+                return extract_jsonpath(self.records_jsonpath, input=stat)
         yield from extract_jsonpath(self.records_jsonpath, input=stat)
 
 
