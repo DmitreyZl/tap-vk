@@ -9,6 +9,9 @@ from vk_api.exceptions import ApiError
 import typing as t
 from importlib import resources
 import datetime
+import psycopg2
+from psycopg2 import sql
+from typing import List, Any
 
 from singer_sdk import typing as th  # JSON Schema typing helpers
 from singer_sdk.helpers.jsonpath import extract_jsonpath
@@ -226,6 +229,144 @@ class StoryStream(VkStream):
         vk = vk_session.get_api()
         owner_id = 0 - self.config.get('group_id')
         stories = vk.stories.get(owner_id=owner_id)
+        stat = []
+        for i in stories['items']:
+            for j in i:
+
+                try:
+                    st = vk.stories.getStats(owner_id=owner_id, story_id=j['id'])
+                    logging.error(st)
+                    if len(j.get('clickable_stickers', {}).get('clickable_stickers', [])) != 0:
+                        link = j.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object', {}).get('url', '-')
+                    else:
+                        link = '-'
+                    w = {'id': j['id'],
+                         'group_id': abs(owner_id),
+                         'date': j['date'],
+                         'expires_at': j['expires_at'],
+                         'type': j.get('type', '-'),
+                         'track_code': j.get('track_code', '-'),
+                         'views': st.get('views', {}).get('count', 0),
+                         'replies': st.get('replies', {}).get('count', 0),
+                         'likes_count': j.get('likes_count', 0),
+                         'new_reactions': len(j.get('new_reactions', [])),
+                         'narratives_count': j.get('narratives_count', 0),
+                         'answer': st.get('answer', {}).get('count', 0),
+                         'shares': st.get('shares', {}).get('count', 0),
+                         'subscribers': st.get('subscribers', {}).get('count', 0),
+                         'bans': st.get('bans', {}).get('count', 0),
+                         'open_link': st.get('open_link', {}).get('count', 0),
+                         'link': link
+                         }
+                    stat.append(w)
+                except ApiError:
+                    pass
+        yield from extract_jsonpath(self.records_jsonpath, input=stat)
+
+
+class StoryHistoryStream(VkStream):
+    """Define custom stream."""
+
+    name = "story"
+    primary_keys = ["id", "group_id"]
+    logger = logging.getLogger('vk_api')
+
+    schema = th.PropertiesList(
+        th.Property(
+            "group_id",
+            th.IntegerType,
+            description="The group's system ID",
+        ),
+        th.Property("id", th.IntegerType),
+        th.Property("date", th.IntegerType),
+        th.Property("expires_at", th.IntegerType),
+        th.Property("type", th.StringType),
+        th.Property("track_code", th.StringType),
+        th.Property("replies", th.IntegerType),
+        th.Property("views", th.IntegerType),
+        th.Property("likes_count", th.IntegerType),
+        th.Property("new_reactions", th.IntegerType),
+        th.Property("narratives_count", th.IntegerType),
+        th.Property("answer", th.IntegerType),
+        th.Property("shares", th.IntegerType),
+        th.Property("subscribers", th.IntegerType),
+        th.Property("bans", th.IntegerType),
+        th.Property("open_link", th.IntegerType),
+        th.Property("link", th.StringType)
+    ).to_dict()
+
+    @staticmethod
+    def fetch_ids(
+            host: str,
+            port: int,
+            dbname: str,
+            user: str,
+            password: str,
+            id_group: int,
+    ) -> List[Any]:
+        conn = None
+        try:
+            # Устанавливаем соединение
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password
+            )
+            # Открываем курсор
+            with conn.cursor() as cur:
+                # Формируем безопасный SQL-запрос
+                query = sql.SQL("SELECT distinct id FROM raw_vk.story where group_id={id_group}").format(
+                    id_group=sql.Identifier(id_group)
+                )
+                cur.execute(query)
+                # Извлекаем все строки
+                rows = cur.fetchall()
+                # rows имеет вид [(1,), (2,), ...] — превращаем в плоский список
+                ids = [str(id_group) + '_' + str(row[0]) for row in rows]
+                return ids
+
+        except psycopg2.Error as e:
+            # В случае ошибки выводим её в лог и пробрасываем дальше
+            print(f"Error fetching ids: {e}")
+            raise
+
+        finally:
+            if conn:
+                conn.close()
+
+    def get_records(
+            self,
+            context: Context | None,
+    ) -> t.Iterable[dict]:
+        """Return a generator of record-type dictionary objects.
+
+        The optional `context` argument is used to identify a specific slice of the
+        stream if partitioning is required for the stream. Most implementations do not
+        require partitioning and should ignore the `context` argument.
+
+        Args:
+            context: Stream partition or context dictionary.
+
+        Raises:
+            NotImplementedError: If the implementation is TODO
+        """
+        # Ваш токен доступа
+        params = self.config.get("params") or {}
+        token = self.config.get('token')
+        vk_session = VkApi(token=token)
+
+        # Получаем объект VK_API
+        vk = vk_session.get_api()
+        owner_id = 0 - self.config.get('group_id')
+        stories = self.fetch_ids(host=params.get('host'),
+                                 port=params.get('port'),
+                                 dbname=params.get('db'),
+                                 user=params.get('user'),
+                                 password=params.get('password'),
+                                 id_group=owner_id)
+        stories = vk.stories.getById(stories=stories)
         stat = []
         for i in stories['items']:
             for j in i:
