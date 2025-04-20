@@ -237,7 +237,8 @@ class StoryStream(VkStream):
                     st = vk.stories.getStats(owner_id=owner_id, story_id=j['id'])
                     logging.error(st)
                     if len(j.get('clickable_stickers', {}).get('clickable_stickers', [])) != 0:
-                        link = j.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object', {}).get('url', '-')
+                        link = j.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object',
+                                                                                                    {}).get('url', '-')
                     else:
                         link = '-'
                     w = {'id': j['id'],
@@ -317,13 +318,13 @@ class StoryHistoryStream(VkStream):
             # Открываем курсор
             with conn.cursor() as cur:
                 # Формируем безопасный SQL-запрос
-                query = sql.SQL("SELECT distinct id FROM raw_vk.story where group_id={id_group}").format(
-                    id_group=sql.Identifier(id_group)
-                )
-                cur.execute(query)
+                group_id = -1 * id_group
+                cur.execute(f"SELECT distinct id FROM raw_vk.story where group_id={group_id}")
                 # Извлекаем все строки
                 rows = cur.fetchall()
                 # rows имеет вид [(1,), (2,), ...] — превращаем в плоский список
+                if len(rows) == 0:
+                    return []
                 ids = [str(id_group) + '_' + str(row[0]) for row in rows]
                 return ids
 
@@ -360,45 +361,48 @@ class StoryHistoryStream(VkStream):
         # Получаем объект VK_API
         vk = vk_session.get_api()
         owner_id = 0 - self.config.get('group_id')
-        stories = self.fetch_ids(host=params.get('host'),
-                                 port=params.get('port'),
-                                 dbname=params.get('db'),
-                                 user=params.get('user'),
-                                 password=params.get('password'),
-                                 id_group=owner_id)
-        stories = vk.stories.getById(stories=stories)
+        stories_all_list = self.fetch_ids(host=params.get('host'),
+                                          port=params.get('port'),
+                                          dbname=params.get('database'),
+                                          user=params.get('user'),
+                                          password=params.get('password'),
+                                          id_group=owner_id)
         stat = []
-        for i in stories['items']:
-            for j in i:
+        if len(stories_all_list) == 0:
+            return extract_jsonpath(self.records_jsonpath, input=stat)
+        logging.error(stories_all_list)
+        stories = vk.stories.getById(stories=stories_all_list[:100])
 
-                try:
-                    st = vk.stories.getStats(owner_id=owner_id, story_id=j['id'])
-                    logging.error(st)
-                    if len(j.get('clickable_stickers', {}).get('clickable_stickers', [])) != 0:
-                        link = j.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object', {}).get('url', '-')
-                    else:
-                        link = '-'
-                    w = {'id': j['id'],
-                         'group_id': abs(owner_id),
-                         'date': j['date'],
-                         'expires_at': j['expires_at'],
-                         'type': j.get('type', '-'),
-                         'track_code': j.get('track_code', '-'),
-                         'views': st.get('views', {}).get('count', 0),
-                         'replies': st.get('replies', {}).get('count', 0),
-                         'likes_count': j.get('likes_count', 0),
-                         'new_reactions': len(j.get('new_reactions', [])),
-                         'narratives_count': j.get('narratives_count', 0),
-                         'answer': st.get('answer', {}).get('count', 0),
-                         'shares': st.get('shares', {}).get('count', 0),
-                         'subscribers': st.get('subscribers', {}).get('count', 0),
-                         'bans': st.get('bans', {}).get('count', 0),
-                         'open_link': st.get('open_link', {}).get('count', 0),
-                         'link': link
-                         }
-                    stat.append(w)
-                except ApiError:
-                    pass
+        for i in stories['items']:
+            try:
+                # logging.info(i)
+                st = vk.stories.getStats(owner_id=owner_id, story_id=i['id'])
+                if len(i.get('clickable_stickers', {}).get('clickable_stickers', [])) != 0:
+                    link = i.get('clickable_stickers', {}).get('clickable_stickers', [])[0].get('link_object', {}).get(
+                        'url', '-')
+                else:
+                    link = '-'
+                w = {'id': i['id'],
+                     'group_id': abs(owner_id),
+                     'date': i['date'],
+                     'expires_at': i['expires_at'],
+                     'type': i.get('type', '-'),
+                     'track_code': i.get('track_code', '-'),
+                     'views': st.get('views', {}).get('count', 0),
+                     'replies': st.get('replies', {}).get('count', 0),
+                     'likes_count': i.get('likes_count', 0),
+                     'new_reactions': len(i.get('new_reactions', [])),
+                     'narratives_count': i.get('narratives_count', 0),
+                     'answer': st.get('answer', {}).get('count', 0),
+                     'shares': st.get('shares', {}).get('count', 0),
+                     'subscribers': st.get('subscribers', {}).get('count', 0),
+                     'bans': st.get('bans', {}).get('count', 0),
+                     'open_link': st.get('open_link', {}).get('count', 0),
+                     'link': link
+                     }
+                stat.append(w)
+            except ApiError:
+                pass
         yield from extract_jsonpath(self.records_jsonpath, input=stat)
 
 
