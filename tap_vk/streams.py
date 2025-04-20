@@ -372,7 +372,7 @@ class StoryHistoryStream(VkStream):
             return extract_jsonpath(self.records_jsonpath, input=stat)
         logging.error(stories_all_list)
         try:
-            stories = vk.stories.getById(stories=stories_all_list[100:200])
+            stories = vk.stories.getById(stories=stories_all_list[:100])
         except ApiError:
             return extract_jsonpath(self.records_jsonpath, input=stat)
         for i in stories['items']:
