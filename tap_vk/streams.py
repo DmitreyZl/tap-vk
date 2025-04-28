@@ -268,7 +268,7 @@ class StoryStream(VkStream):
 class StoryHistoryStream(VkStream):
     """Define custom stream."""
 
-    name = "story"
+    name = "story_history"
     primary_keys = ["id", "group_id"]
     logger = logging.getLogger('vk_api')
 
