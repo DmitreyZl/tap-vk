@@ -637,7 +637,7 @@ class GroupStatStream(VkStream):
         # Получаем объект VK_API
         vk = vk_session.get_api()
         today = datetime.datetime.today()
-        one_day = datetime.timedelta(days=22)
+        one_day = datetime.timedelta(days=220)
         yesterday = today - one_day
         time1 = datetime.time(0)  # 00:00
         date_time_1 = datetime.datetime.combine(yesterday, time1)
